@@ -55,9 +55,13 @@ interface PullRequestPayload {
   isRereview?: boolean;
 }
 
+const privateKey = process.env.GITHUB_APP_PRIVATE_KEY
+  ? process.env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n")
+  : fs.readFileSync(process.env.GITHUB_APP_PRIVATE_KEY_PATH!, "utf8");
+
 const app = new App({
   appId: process.env.GITHUB_APP_ID!,
-  privateKey: fs.readFileSync(process.env.GITHUB_APP_PRIVATE_KEY_PATH!, "utf8"),
+  privateKey,
   webhooks: { secret: process.env.GITHUB_WEBHOOK_SECRET! },
 });
 
