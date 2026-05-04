@@ -4,10 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reviews, reviewComments, repositories } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { rateLimit } from "@/lib/ratelimit";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,17 +16,29 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!rateLimit(`api:${session.user.id}`, 60, 60_000)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
     const { id } = await params;
     const userId = session.user.id;
 
     const [review] = await db
       .select({
-        id: reviews.id, prNumber: reviews.prNumber, prTitle: reviews.prTitle,
-        prUrl: reviews.prUrl, author: reviews.author, severity: reviews.severity,
-        confidence: reviews.confidence, summary: reviews.summary,
-        filesChanged: reviews.filesChanged, additions: reviews.additions,
-        deletions: reviews.deletions, status: reviews.status,
-        createdAt: reviews.createdAt, repoFullName: repositories.fullName,
+        id: reviews.id,
+        prNumber: reviews.prNumber,
+        prTitle: reviews.prTitle,
+        prUrl: reviews.prUrl,
+        author: reviews.author,
+        severity: reviews.severity,
+        confidence: reviews.confidence,
+        summary: reviews.summary,
+        filesChanged: reviews.filesChanged,
+        additions: reviews.additions,
+        deletions: reviews.deletions,
+        status: reviews.status,
+        createdAt: reviews.createdAt,
+        repoFullName: repositories.fullName,
       })
       .from(reviews)
       .leftJoin(repositories, eq(reviews.repositoryId, repositories.id))

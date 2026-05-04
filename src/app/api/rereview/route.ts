@@ -5,12 +5,17 @@ import { db } from "@/lib/db";
 import { reviews, repositories } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { handlePullRequest } from "@/lib/github/handler";
+import { rateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!rateLimit(`api:${session.user.id}`, 60, 60_000)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
     const userId = session.user.id;

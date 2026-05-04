@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/github/verify";
 import { handlePullRequest } from "@/lib/github/handler";
+import { rateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
   console.log("[WEBHOOK] received");
+
+  const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+  if (!rateLimit(`webhook:${ip}`, 100, 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   const body = await req.text();
   const signature = req.headers.get("x-hub-signature-256") ?? "";

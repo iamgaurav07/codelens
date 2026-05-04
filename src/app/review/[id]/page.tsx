@@ -186,7 +186,14 @@ export default function ReviewDetail() {
         <span style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>
           PR #{review?.prNumber}
         </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            marginLeft: "auto",
+          }}
+        >
           <Link
             href="/settings"
             style={{
@@ -196,6 +203,39 @@ export default function ReviewDetail() {
             }}
           >
             Settings
+          </Link>
+          <Link href="/profile" style={{ textDecoration: "none" }}>
+            {session?.user?.image ? (
+              <img
+                src={session.user.image}
+                alt=""
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  display: "block",
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  background: "rgba(110,231,183,0.1)",
+                  border: "1px solid rgba(110,231,183,0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#6EE7B7",
+                }}
+              >
+                {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
+              </div>
+            )}
           </Link>
         </div>
       </nav>

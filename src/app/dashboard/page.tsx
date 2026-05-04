@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { ReviewRowSkeleton, StatCardSkeleton } from "@/components/skeleton";
 
 type Review = {
   id: string;
@@ -220,7 +221,7 @@ export default function Dashboard() {
             CodeLens
           </span>
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <Link
             href="/dashboard"
             style={{
@@ -266,6 +267,39 @@ export default function Dashboard() {
               Live
             </span>
           </div>
+          <Link href="/profile" style={{ textDecoration: "none" }}>
+            {session?.user?.image ? (
+              <img
+                src={session.user.image}
+                alt=""
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  display: "block",
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "rgba(110,231,183,0.1)",
+                  border: "1px solid rgba(110,231,183,0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#6EE7B7",
+                }}
+              >
+                {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
+              </div>
+            )}
+          </Link>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div
@@ -338,63 +372,82 @@ export default function Dashboard() {
         </div>
 
         {/* STATS */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 16,
-            marginBottom: 32,
-          }}
-        >
-          {[
-            { label: "Total reviews", value: stats.total, color: "#fff" },
-            { label: "High severity", value: stats.high, color: "#F87171" },
-            { label: "Medium severity", value: stats.medium, color: "#FCD34D" },
-            { label: "Low severity", value: stats.low, color: "#6EE7B7" },
-          ].map((s, i) => (
-            <div
-              key={i}
-              style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                borderRadius: 12,
-                padding: "24px",
-                cursor: "pointer",
-              }}
-              onClick={() =>
-                setSeverityFilter(
-                  i === 0
-                    ? "all"
-                    : i === 1
-                      ? "high"
-                      : i === 2
-                        ? "medium"
-                        : "low",
-                )
-              }
-            >
+        {loading ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 16,
+              marginBottom: 32,
+            }}
+          >
+            {[0, 1, 2, 3].map((i) => (
+              <StatCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 16,
+              marginBottom: 32,
+            }}
+          >
+            {[
+              { label: "Total reviews", value: stats.total, color: "#fff" },
+              { label: "High severity", value: stats.high, color: "#F87171" },
+              {
+                label: "Medium severity",
+                value: stats.medium,
+                color: "#FCD34D",
+              },
+              { label: "Low severity", value: stats.low, color: "#6EE7B7" },
+            ].map((s, i) => (
               <div
+                key={i}
                 style={{
-                  fontSize: 32,
-                  fontWeight: 800,
-                  letterSpacing: "-0.04em",
-                  color: s.color,
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 12,
+                  padding: "24px",
+                  cursor: "pointer",
                 }}
+                onClick={() =>
+                  setSeverityFilter(
+                    i === 0
+                      ? "all"
+                      : i === 1
+                        ? "high"
+                        : i === 2
+                          ? "medium"
+                          : "low",
+                  )
+                }
               >
-                {s.value}
+                <div
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 800,
+                    letterSpacing: "-0.04em",
+                    color: s.color,
+                  }}
+                >
+                  {s.value}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.4)",
+                    marginTop: 4,
+                  }}
+                >
+                  {s.label}
+                </div>
               </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.4)",
-                  marginTop: 4,
-                }}
-              >
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* TRENDS CHART */}
         {trends.length > 0 && (
@@ -703,35 +756,11 @@ export default function Dashboard() {
           </div>
 
           {loading ? (
-            <div
-              style={{
-                padding: "60px",
-                textAlign: "center" as const,
-                color: "rgba(255,255,255,0.3)",
-              }}
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                style={{
-                  animation: "spin 1s linear infinite",
-                  display: "block",
-                  margin: "0 auto 12px",
-                }}
-              >
-                <path
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  strokeOpacity="0.2"
-                />
-                <path d="M21 12a9 9 0 00-9-9" strokeLinecap="round" />
-              </svg>
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-              Loading...
-            </div>
+            <>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <ReviewRowSkeleton key={i} />
+              ))}
+            </>
           ) : filtered.length === 0 ? (
             <div
               style={{

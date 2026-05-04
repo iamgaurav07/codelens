@@ -3,13 +3,18 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reviews, repositories } from "@/lib/db/schema";
-import { desc, eq, count, and, sql } from "drizzle-orm";
+import { desc, eq, count, sql } from "drizzle-orm";
+import { rateLimit } from "@/lib/ratelimit";
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!rateLimit(`api:${session.user.id}`, 60, 60_000)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
     const userId = session.user.id;
