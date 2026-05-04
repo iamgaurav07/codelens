@@ -173,6 +173,29 @@ export async function handlePullRequest(payload: PullRequestPayload) {
     );
   }
 
+  const EXCLUDED_FILES = [
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    ".env.example",
+    "drizzle.config.ts",
+    "next.config.ts",
+    "tailwind.config.ts",
+    "tsconfig.json",
+    ".eslintrc",
+    ".gitignore",
+    "README.md",
+  ];
+
+  const EXCLUDED_PATTERNS = [
+    /\.md$/,
+    /\.lock$/,
+    /\.json$/,
+    /migration/,
+    /drizzle\//,
+  ];
+
   // detect languages
   const languages = [
     ...new Set(
@@ -198,9 +221,13 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   ].join(", ");
   console.log("[LANG] " + (languages || "unknown"));
 
-  // build diff string
   const diffText = files
-    .filter((f: GitHubFile) => f.patch)
+    .filter((f: GitHubFile) => {
+      if (!f.patch) return false;
+      if (EXCLUDED_FILES.includes(f.filename)) return false;
+      if (EXCLUDED_PATTERNS.some((p) => p.test(f.filename))) return false;
+      return true;
+    })
     .map(
       (f: GitHubFile) =>
         `File: ${f.filename}\nStatus: ${f.status}\n+${f.additions} -${f.deletions}\n\`\`\`diff\n${f.patch}\n\`\`\``,
@@ -229,10 +256,10 @@ export async function handlePullRequest(payload: PullRequestPayload) {
 Review the PR diff with focus on:
 
 SECURITY (highest priority):
-- Hardcoded secrets, API keys, passwords
+- Hardcoded secrets, API keys, passwords (NOT environment variables — process.env usage is correct)
 - SQL injection, XSS, CSRF vulnerabilities
 - Insecure authentication or authorization
-- Sensitive data exposure
+- Sensitive data exposure in logs or responses
 
 BUGS & LOGIC:
 - Null/undefined errors, off-by-one errors
