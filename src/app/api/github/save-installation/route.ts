@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
 
     const { installationId } = await req.json();
     if (!installationId) {
-      return NextResponse.json({ error: "Missing installationId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing installationId" },
+        { status: 400 },
+      );
     }
 
     const [existing] = await db
@@ -27,7 +30,21 @@ export async function POST(req: NextRequest) {
         userId: session.user.id,
         installationId,
       });
-      console.log(`[INSTALL] saved installationId ${installationId} for user ${session.user.id}`);
+      console.log(
+        `[INSTALL] saved installationId ${installationId} for user ${session.user.id}`,
+      );
+    } else if (existing.userId !== session.user.id) {
+      await db
+        .update(installations)
+        .set({ userId: session.user.id })
+        .where(eq(installations.installationId, installationId));
+      console.log(
+        `[INSTALL] reassigned installationId ${installationId} to user ${session.user.id}`,
+      );
+    } else {
+      console.log(
+        `[INSTALL] installationId ${installationId} already linked to current user`,
+      );
     }
 
     return NextResponse.json({ ok: true });

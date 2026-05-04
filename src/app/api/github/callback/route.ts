@@ -24,14 +24,12 @@ export async function GET(req: NextRequest) {
     console.log("[INSTALL] session userId:", session?.user?.id ?? "none");
 
     if (!session?.user?.id) {
-      // save installation_id in URL and send to login
       const returnUrl = `/settings?installation_id=${installationId}`;
       return NextResponse.redirect(
         new URL(`/login?callbackUrl=${encodeURIComponent(returnUrl)}`, APP_URL)
       );
     }
 
-    // user is logged in — save directly
     const [existing] = await db
       .select()
       .from(installations)
@@ -43,6 +41,13 @@ export async function GET(req: NextRequest) {
         installationId: parseInt(installationId),
       });
       console.log(`[INSTALL] saved installationId ${installationId} for user ${session.user.id}`);
+    } else if (existing.userId !== session.user.id) {
+      await db.update(installations)
+        .set({ userId: session.user.id })
+        .where(eq(installations.installationId, parseInt(installationId)));
+      console.log(`[INSTALL] reassigned installationId ${installationId} to user ${session.user.id}`);
+    } else {
+      console.log(`[INSTALL] already linked to current user`);
     }
 
     return NextResponse.redirect(new URL("/settings?installed=true", APP_URL));
