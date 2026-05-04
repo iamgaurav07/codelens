@@ -352,16 +352,20 @@ Return only JSON. No markdown, no explanation.`;
     savedReview.id;
 
   if (review.severity === "high") {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    if (user?.email) {
-      sendHighSeverityAlert({
-        to: user.email,
-        prTitle: pull_request.title,
-        prUrl: pull_request.html_url,
-        repoName: repository.full_name,
-        summary: review.summary,
-        reviewUrl: dashboardUrl,
-      }).catch((err) => console.error("[EMAIL] failed:", err));
+    try {
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (user?.email) {
+        await sendHighSeverityAlert({
+          to: user.email,
+          prTitle: pull_request.title,
+          prUrl: pull_request.html_url,
+          repoName: repository.full_name,
+          summary: review.summary,
+          reviewUrl: dashboardUrl,
+        });
+      }
+    } catch (err) {
+      console.error("[EMAIL] high severity alert failed:", err);
     }
   }
 
