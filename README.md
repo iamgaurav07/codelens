@@ -2,9 +2,7 @@
 
 > AI-powered code review that sees everything.
 
-CodeLens is a GitHub App that automatically reviews every pull request using GPT-4o — catching bugs, security vulnerabilities, and architecture issues before they merge.
-
-![CodeLens Dashboard](https://via.placeholder.com/1200x600/0A0A0F/6EE7B7?text=CodeLens+Dashboard)
+CodeLens is a production-ready GitHub App that automatically reviews every pull request using GPT-4o — catching bugs, security vulnerabilities, and architecture issues before they merge. Multi-tenant, auth-protected, and built for real teams.
 
 ---
 
@@ -14,10 +12,14 @@ CodeLens is a GitHub App that automatically reviews every pull request using GPT
 - **Language-aware** — detects TypeScript, Python, SQL, and more for context-specific feedback
 - **4 issue categories** — Security 🔒, Bugs 🐛, Performance ⚡, Quality ✨
 - **GitHub status checks** — blocks merges on high severity issues
-- **Severity levels** — Low, Medium, High with confidence scoring
-- **Live dashboard** — track all reviews, trends, and stats across repos
+- **Severity + confidence scoring** — Low, Medium, High with AI confidence level
 - **Re-review** — trigger a fresh AI review on any PR from the dashboard
-- **Multi-repo** — install on as many repos as you want
+- **Multi-tenant** — each user sees only their own repos and reviews
+- **Auth** — GitHub OAuth + email/password sign in
+- **Onboarding flow** — guided setup from register → install → first review
+- **Live dashboard** — track all reviews, trends chart, severity stats
+- **Email alerts** — get notified on high severity issues
+- **Rate limiting** — API protection built in
 
 ---
 
@@ -29,7 +31,9 @@ CodeLens is a GitHub App that automatically reviews every pull request using GPT
 | Language | TypeScript |
 | Database | PostgreSQL + Drizzle ORM |
 | AI | OpenAI GPT-4o-mini |
+| Auth | NextAuth.js v4 (GitHub OAuth + Credentials) |
 | GitHub | Octokit + GitHub Apps API |
+| Email | Nodemailer |
 | Hosting | Railway |
 
 ---
@@ -37,7 +41,13 @@ CodeLens is a GitHub App that automatically reviews every pull request using GPT
 ## How It Works
 
 ```
-Developer opens PR
+User registers / signs in
+       ↓
+Installs CodeLens GitHub App on their repos
+       ↓
+GitHub links installationId → userId via callback
+       ↓
+Developer opens a PR
        ↓
 GitHub sends webhook to CodeLens
        ↓
@@ -45,13 +55,15 @@ CodeLens fetches the diff via GitHub API
        ↓
 GPT-4o reviews the diff (language-aware prompt)
        ↓
-Structured JSON response: summary, severity, comments
+Structured JSON: summary, severity, confidence, comments
        ↓
-Review saved to Postgres + posted as PR comment
+Review saved to Postgres (scoped to userId)
        ↓
-GitHub status check updated (✅ or ❌)
+Posted as PR comment + GitHub status check updated
        ↓
-Full review visible on CodeLens dashboard
+Email alert sent if high severity
+       ↓
+Full review visible on user's CodeLens dashboard
 ```
 
 ---
@@ -61,7 +73,7 @@ Full review visible on CodeLens dashboard
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL
+- PostgreSQL (or Docker)
 - OpenAI API key
 - GitHub account
 
@@ -76,13 +88,14 @@ npm install
 ### 2. Create a GitHub App
 
 1. Go to [github.com/settings/apps/new](https://github.com/settings/apps/new)
-2. Set the following permissions:
+2. Set permissions:
    - **Pull requests** → Read & Write
    - **Contents** → Read only
    - **Checks** → Read & Write
    - **Metadata** → Read only
 3. Subscribe to **Pull request** events
-4. Generate and download a private key
+4. Set **Setup URL** to `https://your-domain.com/api/github/callback`
+5. Generate and download a private key
 
 ### 3. Set up environment variables
 
@@ -97,21 +110,41 @@ Fill in `.env.local`:
 GITHUB_APP_ID=your_app_id
 GITHUB_APP_PRIVATE_KEY_PATH=./private-key.pem
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
-GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_ID=your_github_oauth_client_id
+GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
 
 # OpenAI
 OPENAI_API_KEY=your_openai_key
 
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/codelens
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/codelens
+
+# Auth
+NEXTAUTH_SECRET=your_random_secret
+NEXTAUTH_URL=http://localhost:3000
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Email (optional)
+EMAIL_FROM=noreply@codelens.dev
+EMAIL_SERVER_HOST=smtp.gmail.com
+EMAIL_SERVER_PORT=587
+EMAIL_SERVER_USER=your@gmail.com
+EMAIL_SERVER_PASSWORD=your_app_password
 ```
 
 ### 4. Set up the database
 
 ```bash
+# with Docker:
+docker run --name codelens-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=codelens \
+  -p 5432:5432 -d postgres:15
+
+# run migrations:
 npx dotenv-cli -e .env.local -- npx drizzle-kit push
 ```
 
@@ -129,7 +162,7 @@ npm run dev
 
 ### 7. Install the GitHub App
 
-Go to `https://github.com/apps/your-app-name` and install it on your repos.
+Go to `http://localhost:3000/register` → create account → follow the onboarding flow.
 
 ---
 
@@ -138,23 +171,55 @@ Go to `https://github.com/apps/your-app-name` and install it on your repos.
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Landing page
-│   ├── dashboard/page.tsx          # Reviews dashboard
-│   ├── review/[id]/page.tsx        # Review detail
-│   ├── settings/page.tsx           # Repo settings
+│   ├── page.tsx                      # Landing page (auth-aware)
+│   ├── login/page.tsx                # Sign in
+│   ├── register/page.tsx             # Sign up
+│   ├── onboarding/page.tsx           # New user onboarding
+│   ├── dashboard/page.tsx            # Reviews dashboard
+│   ├── review/[id]/page.tsx          # Review detail
+│   ├── settings/page.tsx             # Repo settings
+│   ├── profile/page.tsx              # User profile
+│   ├── not-found.tsx                 # 404 page
+│   ├── error.tsx                     # 500 page
 │   └── api/
-│       ├── webhook/github/route.ts # GitHub webhook handler
-│       ├── reviews/route.ts        # Reviews API
-│       ├── reviews/[id]/route.ts   # Review detail API
-│       ├── repositories/route.ts   # Repositories API
-│       └── rereview/route.ts       # Re-review trigger
+│       ├── auth/[...nextauth]/       # NextAuth handler
+│       ├── webhook/github/           # GitHub webhook receiver
+│       ├── github/callback/          # GitHub App install callback
+│       ├── register/                 # User registration
+│       ├── reviews/                  # Reviews API (list + detail)
+│       ├── repositories/             # Repositories API
+│       ├── rereview/                 # Re-review trigger
+│       └── profile/                  # Profile update
 ├── lib/
+│   ├── auth.ts                       # NextAuth config
+│   ├── db/
+│   │   ├── index.ts                  # Database client
+│   │   └── schema.ts                 # Drizzle schema
 │   ├── github/
-│   │   ├── handler.ts              # PR handler + AI review
-│   │   └── verify.ts               # Webhook signature verification
-│   └── db/
-│       ├── index.ts                # Database client
-│       └── schema.ts               # Drizzle schema
+│   │   ├── handler.ts                # PR handler + AI review engine
+│   │   └── verify.ts                 # Webhook signature verification
+│   ├── email.ts                      # Email notifications
+│   └── ratelimit.ts                  # In-memory rate limiting
+├── components/
+│   └── skeleton.tsx                  # Loading skeleton components
+├── types/
+│   └── next-auth.d.ts               # NextAuth type extensions
+└── middleware.ts                     # Route protection
+```
+
+---
+
+## Database Schema
+
+```
+users               — auth accounts
+accounts            — OAuth provider links
+sessions            — user sessions
+verification_tokens — email verification
+installations       — GitHub App install → userId mapping
+repositories        — connected repos (scoped to userId)
+reviews             — AI reviews (scoped to userId)
+review_comments     — individual review issues
 ```
 
 ---
@@ -162,36 +227,23 @@ src/
 ## Deployment (Railway)
 
 1. Push to GitHub
-2. Create a new Railway project → deploy from GitHub repo
-3. Add a PostgreSQL service
-4. Set all environment variables in Railway dashboard
-5. Update `NEXT_PUBLIC_APP_URL` to your Railway URL
-6. Update GitHub App webhook URL to your Railway URL
+2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub
+3. Add PostgreSQL service
+4. Set environment variables (use `GITHUB_APP_PRIVATE_KEY` instead of file path)
+5. Run migrations: `DATABASE_URL=xxx npx drizzle-kit push`
+6. Update GitHub App webhook URL to production URL
+7. Update GitHub App Setup URL to production URL
 
 ---
 
 ## What CodeLens Reviews
 
-### Security
-- Hardcoded secrets, API keys, passwords
-- SQL injection, XSS, CSRF vulnerabilities
-- Insecure authentication or authorization
-- Sensitive data exposure
-
-### Bugs & Logic
-- Null/undefined errors, off-by-one errors
-- Incorrect conditionals or edge cases
-- Async/await misuse, unhandled promises
-
-### Performance
-- N+1 queries, missing database indexes
-- Unnecessary re-renders in React
-- Memory leaks, inefficient loops
-
-### Code Quality
-- Dead code, unused imports
-- Missing error handling
-- Poor naming conventions
+| Category | Examples |
+|---|---|
+| 🔒 Security | Hardcoded secrets, SQL injection, XSS, CSRF, insecure auth |
+| 🐛 Bugs | Null errors, off-by-one, async misuse, type mismatches |
+| ⚡ Performance | N+1 queries, missing indexes, memory leaks, re-renders |
+| ✨ Quality | Dead code, missing error handling, poor naming, complexity |
 
 ---
 
@@ -200,11 +252,16 @@ src/
 | Variable | Description |
 |---|---|
 | `GITHUB_APP_ID` | Your GitHub App ID |
-| `GITHUB_APP_PRIVATE_KEY_PATH` | Path to your .pem private key |
-| `GITHUB_WEBHOOK_SECRET` | Webhook secret from GitHub App settings |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | Path to .pem (local dev) |
+| `GITHUB_APP_PRIVATE_KEY` | Full PEM contents (production) |
+| `GITHUB_WEBHOOK_SECRET` | Webhook secret from GitHub App |
+| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `NEXT_PUBLIC_APP_URL` | Public URL of your deployed app |
+| `NEXTAUTH_SECRET` | Random secret for JWT signing |
+| `NEXTAUTH_URL` | Full URL of your app |
+| `NEXT_PUBLIC_APP_URL` | Public URL (used in PR comments) |
 
 ---
 
@@ -212,7 +269,7 @@ src/
 
 **Gaurav Kumar** — Full Stack Engineer, Berlin
 - GitHub: [@iamgaurav07](https://github.com/iamgaurav07)
-- Live: [agent-platform-production-6865.up.railway.app](https://agent-platform-production-6865.up.railway.app)
+- Portfolio: [AgentFlow](https://agent-platform-production-6865.up.railway.app) · [PulseVC](https://pulsevc-frontend.onrender.com)
 
 ---
 
