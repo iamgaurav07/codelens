@@ -9,10 +9,10 @@ import {
   reviews,
   reviewComments,
   installations,
+  users,
 } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sendHighSeverityAlert } from "@/lib/email";
-import { users } from "@/lib/db/schema";
 
 interface GitHubFile {
   filename: string;
@@ -55,17 +55,64 @@ interface PullRequestPayload {
   isRereview?: boolean;
 }
 
-const privateKey = process.env.GITHUB_APP_PRIVATE_KEY
-  ? process.env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n")
-  : fs.readFileSync(process.env.GITHUB_APP_PRIVATE_KEY_PATH!, "utf8");
+const EXCLUDED_FILES = [
+  "package.json",
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  ".env.example",
+  "drizzle.config.ts",
+  "next.config.ts",
+  "tailwind.config.ts",
+  "tsconfig.json",
+  ".eslintrc",
+  ".gitignore",
+  "README.md",
+];
 
-const app = new App({
-  appId: process.env.GITHUB_APP_ID!,
-  privateKey,
-  webhooks: { secret: process.env.GITHUB_WEBHOOK_SECRET! },
-});
+const EXCLUDED_PATTERNS = [
+  /\.md$/,
+  /\.lock$/,
+  /\.json$/,
+  /migration/,
+  /drizzle\//,
+];
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+// ── Lazy singletons ───────────────────────────────────────────────────────
+
+let _app: App | null = null;
+let _openai: OpenAI | null = null;
+
+function getApp(): App {
+  if (_app) return _app;
+
+  const privateKey = process.env.GITHUB_APP_PRIVATE_KEY
+    ? process.env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n")
+    : process.env.GITHUB_APP_PRIVATE_KEY_PATH
+    ? fs.readFileSync(process.env.GITHUB_APP_PRIVATE_KEY_PATH, "utf8")
+    : "";
+
+  if (!privateKey) throw new Error("[HANDLER] GitHub App private key not configured");
+  if (!process.env.GITHUB_APP_ID) throw new Error("[HANDLER] GITHUB_APP_ID not configured");
+  if (!process.env.GITHUB_WEBHOOK_SECRET) throw new Error("[HANDLER] GITHUB_WEBHOOK_SECRET not configured");
+
+  _app = new App({
+    appId: process.env.GITHUB_APP_ID,
+    privateKey,
+    webhooks: { secret: process.env.GITHUB_WEBHOOK_SECRET },
+  });
+
+  return _app;
+}
+
+function getOpenAI(): OpenAI {
+  if (_openai) return _openai;
+  if (!process.env.OPENAI_API_KEY) throw new Error("[HANDLER] OPENAI_API_KEY not configured");
+  _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return _openai;
+}
+
+// ── Check run helper ──────────────────────────────────────────────────────
 
 async function createCheckRun(
   octokit: Octokit,
@@ -96,14 +143,16 @@ async function createCheckRun(
   });
 }
 
+// ── Main handler ──────────────────────────────────────────────────────────
+
 export async function handlePullRequest(payload: PullRequestPayload) {
   const { pull_request, repository, installation } = payload;
+
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("[PR] #" + pull_request.number + " — " + pull_request.title);
   console.log("[PR] author: " + pull_request.user.login);
   console.log("[PR] repo: " + repository.full_name);
   console.log("[PR] installationId: " + installation.id);
-  console.log("[PR] action: opened/synchronized");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
   // lookup userId from installations table
@@ -113,11 +162,7 @@ export async function handlePullRequest(payload: PullRequestPayload) {
     .where(eq(installations.installationId, installation.id));
 
   if (!installRecord) {
-    console.log(
-      "[PR] no user linked to installationId " +
-        installation.id +
-        " — skipping",
-    );
+    console.log("[PR] no user linked to installationId " + installation.id + " — skipping");
     return;
   }
 
@@ -149,10 +194,8 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   }
 
   // get octokit client
-  const installationOctokit = await app.getInstallationOctokit(installation.id);
-  const { token } = (await installationOctokit.auth({
-    type: "installation",
-  })) as any;
+  const installationOctokit = await getApp().getInstallationOctokit(installation.id);
+  const { token } = (await installationOctokit.auth({ type: "installation" })) as any;
   const octokit = new Octokit({ auth: token });
 
   // fetch diff
@@ -168,37 +211,8 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   const skipChecks = payload.isRereview || !sha;
 
   if (!skipChecks) {
-    await createCheckRun(
-      octokit,
-      repository.owner.login,
-      repository.name,
-      sha!,
-      "in_progress",
-    );
+    await createCheckRun(octokit, repository.owner.login, repository.name, sha!, "in_progress");
   }
-
-  const EXCLUDED_FILES = [
-    "package.json",
-    "package-lock.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-    ".env.example",
-    "drizzle.config.ts",
-    "next.config.ts",
-    "tailwind.config.ts",
-    "tsconfig.json",
-    ".eslintrc",
-    ".gitignore",
-    "README.md",
-  ];
-
-  const EXCLUDED_PATTERNS = [
-    /\.md$/,
-    /\.lock$/,
-    /\.json$/,
-    /migration/,
-    /drizzle\//,
-  ];
 
   // detect languages
   const languages = [
@@ -225,6 +239,7 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   ].join(", ");
   console.log("[LANG] " + (languages || "unknown"));
 
+  // build diff string
   const diffText = files
     .filter((f: GitHubFile) => {
       if (!f.patch) return false;
@@ -241,15 +256,7 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   if (!diffText) {
     console.log("[AI] no reviewable diff, skipping");
     if (!skipChecks) {
-      await createCheckRun(
-        octokit,
-        repository.owner.login,
-        repository.name,
-        sha!,
-        "completed",
-        "neutral",
-        "No reviewable diff found.",
-      );
+      await createCheckRun(octokit, repository.owner.login, repository.name, sha!, "completed", "neutral", "No reviewable diff found.");
     }
     return;
   }
@@ -305,7 +312,7 @@ Return only JSON. No markdown, no explanation.`;
 
   // run AI review
   console.log("[AI] reviewing...");
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     temperature: 0.1,
     messages: [
@@ -320,12 +327,9 @@ Return only JSON. No markdown, no explanation.`;
   const raw = response.choices[0].message.content ?? "{}";
   const review = JSON.parse(raw) as AIReview;
   console.log(
-    "[AI] severity: " +
-      review.severity +
-      ", confidence: " +
-      review.confidence +
-      ", comments: " +
-      review.comments.length,
+    "[AI] severity: " + review.severity +
+    ", confidence: " + review.confidence +
+    ", comments: " + review.comments.length,
   );
 
   // save to database
@@ -365,22 +369,11 @@ Return only JSON. No markdown, no explanation.`;
   // post completed check run
   if (!skipChecks) {
     const conclusion = review.severity === "high" ? "failure" : "success";
-    await createCheckRun(
-      octokit,
-      repository.owner.login,
-      repository.name,
-      sha!,
-      "completed",
-      conclusion,
-      review.summary,
-    );
+    await createCheckRun(octokit, repository.owner.login, repository.name, sha!, "completed", conclusion, review.summary);
   }
 
-  // post comment to GitHub PR
-  const dashboardUrl =
-    (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") +
-    "/review/" +
-    savedReview.id;
+  // send email alert for high severity
+  const dashboardUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") + "/review/" + savedReview.id;
 
   if (review.severity === "high") {
     try {
@@ -400,17 +393,9 @@ Return only JSON. No markdown, no explanation.`;
     }
   }
 
-  const severityEmoji: Record<string, string> = {
-    low: "🟢",
-    medium: "🟡",
-    high: "🔴",
-  };
-  const categoryEmoji: Record<string, string> = {
-    security: "🔒",
-    bug: "🐛",
-    performance: "⚡",
-    quality: "✨",
-  };
+  // post comment to GitHub PR
+  const severityEmoji: Record<string, string> = { low: "🟢", medium: "🟡", high: "🔴" };
+  const categoryEmoji: Record<string, string> = { security: "🔒", bug: "🐛", performance: "⚡", quality: "✨" };
 
   let body = `## CodeLens Review ${severityEmoji[review.severity] ?? "⚪"}\n\n`;
   body += `**Summary:** ${review.summary}\n\n`;
