@@ -1,18 +1,29 @@
 import nodemailer from "nodemailer";
 
-if (!process.env.EMAIL_SERVER_HOST || !process.env.EMAIL_SERVER_USER || !process.env.EMAIL_SERVER_PASSWORD) {
+const isConfigured =
+  !!process.env.EMAIL_SERVER_HOST &&
+  !!process.env.EMAIL_SERVER_USER &&
+  !!process.env.EMAIL_SERVER_PASSWORD;
+
+if (!isConfigured) {
   console.warn("[EMAIL] SMTP not configured — email alerts disabled");
 }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_SERVER_HOST,
-  port: Number(process.env.EMAIL_SERVER_PORT ?? 587),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_SERVER_USER,
-    pass: process.env.EMAIL_SERVER_PASSWORD,
-  },
-});
+const transporter = isConfigured
+  ? nodemailer.createTransport({
+      host: process.env.EMAIL_SERVER_HOST,
+      port: Number(process.env.EMAIL_SERVER_PORT ?? 587),
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+    })
+  : null;
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 export async function sendHighSeverityAlert({
   to,
@@ -29,8 +40,13 @@ export async function sendHighSeverityAlert({
   summary: string;
   reviewUrl: string;
 }): Promise<void> {
-  if (!process.env.EMAIL_SERVER_HOST || !process.env.EMAIL_SERVER_USER) {
+  if (!isConfigured || !transporter) {
     console.log("[EMAIL] skipping — SMTP not configured");
+    return;
+  }
+
+  if (!isValidEmail(to)) {
+    console.error("[EMAIL] invalid recipient address:", to);
     return;
   }
 
@@ -52,8 +68,8 @@ export async function sendHighSeverityAlert({
             <div style="font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 8px;">Summary</div>
             <div style="font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.6;">${summary}</div>
           </div>
-          <div style="display: flex; gap: 12px;">
-            <a href="${reviewUrl}" style="background: #6EE7B7; color: #0A0A0F; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">View full review</a>
+          <div>
+            <a href="${reviewUrl}" style="background: #6EE7B7; color: #0A0A0F; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block; margin-right: 12px;">View full review</a>
             <a href="${prUrl}" style="background: rgba(255,255,255,0.06); color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; border: 1px solid rgba(255,255,255,0.1); display: inline-block;">View PR on GitHub</a>
           </div>
           <p style="color: rgba(255,255,255,0.2); font-size: 12px; margin-top: 40px;">You're receiving this because you have high severity alerts enabled on CodeLens.</p>
