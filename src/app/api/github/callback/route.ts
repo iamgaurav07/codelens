@@ -7,17 +7,14 @@ import { eq } from "drizzle-orm";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ??
-  (process.env.RAILWAY_PUBLIC_DOMAIN
-    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-    : "http://localhost:3000");
+  "https://codelens-production-e6c5.up.railway.app";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
     const installationId = searchParams.get("installation_id");
-    const setupAction = searchParams.get("setup_action");
 
-    console.log("[INSTALL] callback hit, installationId:", installationId, "action:", setupAction);
+    console.log("[INSTALL] callback hit, installationId:", installationId);
 
     if (!installationId) {
       return NextResponse.redirect(new URL("/settings?error=no_installation", APP_URL));
@@ -27,43 +24,30 @@ export async function GET(req: NextRequest) {
     console.log("[INSTALL] session userId:", session?.user?.id ?? "none");
 
     if (!session?.user?.id) {
-      // store installation_id in a cookie and redirect to login
-      const response = NextResponse.redirect(
-        new URL("/login?reason=install", APP_URL)
+      // save installation_id in URL and send to login
+      const returnUrl = `/settings?installation_id=${installationId}`;
+      return NextResponse.redirect(
+        new URL(`/login?callbackUrl=${encodeURIComponent(returnUrl)}`, APP_URL)
       );
-      response.cookies.set("pending_installation_id", installationId, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax",
-        maxAge: 60 * 10, // 10 minutes
-        path: "/",
-      });
-      return response;
     }
 
-    // save installation
-    await saveInstallation(session.user.id, installationId);
+    // user is logged in — save directly
+    const [existing] = await db
+      .select()
+      .from(installations)
+      .where(eq(installations.installationId, parseInt(installationId)));
+
+    if (!existing) {
+      await db.insert(installations).values({
+        userId: session.user.id,
+        installationId: parseInt(installationId),
+      });
+      console.log(`[INSTALL] saved installationId ${installationId} for user ${session.user.id}`);
+    }
 
     return NextResponse.redirect(new URL("/settings?installed=true", APP_URL));
   } catch (e) {
     console.error("[INSTALL] error:", e);
     return NextResponse.redirect(new URL("/settings?error=install_failed", APP_URL));
-  }
-}
-
-async function saveInstallation(userId: string, installationId: string) {
-  const [existing] = await db
-    .select()
-    .from(installations)
-    .where(eq(installations.installationId, parseInt(installationId)));
-
-  if (!existing) {
-    await db.insert(installations).values({
-      userId,
-      installationId: parseInt(installationId),
-    });
-    console.log(`[INSTALL] linked installationId ${installationId} to user ${userId}`);
-  } else {
-    console.log(`[INSTALL] installationId ${installationId} already linked`);
   }
 }

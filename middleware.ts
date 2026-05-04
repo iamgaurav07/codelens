@@ -8,7 +8,7 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/api/webhook",
   "/api/github/callback",
-  "/api/github/link-installation",
+  "/api/github/save-installation",
 ];
 
 export function middleware(req: NextRequest) {
