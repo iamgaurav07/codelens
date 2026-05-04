@@ -45,11 +45,16 @@ export const authOptions: NextAuthOptions = {
 
         const valid = await bcrypt.compare(
           credentials.password as string,
-          account.access_token
+          account.access_token,
         );
 
         if (!valid) return null;
-        return { id: user.id, name: user.name, email: user.email, image: user.image };
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+        };
       },
     }),
   ],
@@ -58,7 +63,6 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
       }
-      // for GitHub OAuth — create user in DB if doesn't exist
       if (account?.provider === "github" && user?.email) {
         const [existing] = await db
           .select()
@@ -66,14 +70,25 @@ export const authOptions: NextAuthOptions = {
           .where(eq(users.email, user.email));
 
         if (!existing) {
-          const [newUser] = await db.insert(users).values({
-            name: user.name,
-            email: user.email,
-            image: user.image,
-            emailVerified: new Date(),
-          }).returning();
+          const [newUser] = await db
+            .insert(users)
+            .values({
+              name: user.name,
+              email: user.email,
+              image: user.image,
+              emailVerified: new Date(),
+            })
+            .returning();
           token.id = newUser.id;
         } else {
+          // only update image, NEVER overwrite name the user may have set
+          await db
+            .update(users)
+            .set({
+              image: user.image ?? existing.image,
+              // name is intentionally NOT updated here
+            })
+            .where(eq(users.id, existing.id));
           token.id = existing.id;
         }
       }
