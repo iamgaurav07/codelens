@@ -4,8 +4,15 @@ import { Octokit } from "@octokit/rest";
 import * as fs from "fs";
 import OpenAI from "openai";
 import { db } from "@/lib/db";
-import { repositories, reviews, reviewComments, installations } from "@/lib/db/schema";
+import {
+  repositories,
+  reviews,
+  reviewComments,
+  installations,
+} from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { sendHighSeverityAlert } from "@/lib/email";
+import { users } from "@/lib/db/schema";
 
 interface GitHubFile {
   filename: string;
@@ -75,9 +82,10 @@ async function createCheckRun(
       conclusion,
       completed_at: new Date().toISOString(),
       output: {
-        title: conclusion === "success"
-          ? "✅ No critical issues found"
-          : "🔴 High severity issues detected",
+        title:
+          conclusion === "success"
+            ? "✅ No critical issues found"
+            : "🔴 High severity issues detected",
         summary: summary ?? "",
       },
     }),
@@ -101,7 +109,11 @@ export async function handlePullRequest(payload: PullRequestPayload) {
     .where(eq(installations.installationId, installation.id));
 
   if (!installRecord) {
-    console.log("[PR] no user linked to installationId " + installation.id + " — skipping");
+    console.log(
+      "[PR] no user linked to installationId " +
+        installation.id +
+        " — skipping",
+    );
     return;
   }
 
@@ -109,26 +121,34 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   console.log("[PR] userId: " + userId);
 
   // upsert repository
-  let [repo] = await db.select().from(repositories).where(
-    and(
-      eq(repositories.installationId, installation.id),
-      eq(repositories.fullName, repository.full_name),
-    ),
-  );
+  let [repo] = await db
+    .select()
+    .from(repositories)
+    .where(
+      and(
+        eq(repositories.installationId, installation.id),
+        eq(repositories.fullName, repository.full_name),
+      ),
+    );
 
   if (!repo) {
-    [repo] = await db.insert(repositories).values({
-      userId,
-      installationId: installation.id,
-      owner: repository.owner.login,
-      name: repository.name,
-      fullName: repository.full_name,
-    }).returning();
+    [repo] = await db
+      .insert(repositories)
+      .values({
+        userId,
+        installationId: installation.id,
+        owner: repository.owner.login,
+        name: repository.name,
+        fullName: repository.full_name,
+      })
+      .returning();
   }
 
   // get octokit client
   const installationOctokit = await app.getInstallationOctokit(installation.id);
-  const { token } = (await installationOctokit.auth({ type: "installation" })) as any;
+  const { token } = (await installationOctokit.auth({
+    type: "installation",
+  })) as any;
   const octokit = new Octokit({ auth: token });
 
   // fetch diff
@@ -160,9 +180,16 @@ export async function handlePullRequest(payload: PullRequestPayload) {
         .map((f: GitHubFile) => {
           const ext = f.filename.split(".").pop()?.toLowerCase();
           const langMap: Record<string, string> = {
-            ts: "TypeScript", tsx: "TypeScript/React", js: "JavaScript",
-            py: "Python", sql: "SQL", prisma: "Prisma Schema",
-            json: "JSON", md: "Markdown", yml: "YAML", yaml: "YAML",
+            ts: "TypeScript",
+            tsx: "TypeScript/React",
+            js: "JavaScript",
+            py: "Python",
+            sql: "SQL",
+            prisma: "Prisma Schema",
+            json: "JSON",
+            md: "Markdown",
+            yml: "YAML",
+            yaml: "YAML",
           };
           return langMap[ext ?? ""] ?? "Unknown";
         })
@@ -262,27 +289,33 @@ Return only JSON. No markdown, no explanation.`;
   const raw = response.choices[0].message.content ?? "{}";
   const review = JSON.parse(raw) as AIReview;
   console.log(
-    "[AI] severity: " + review.severity +
-    ", confidence: " + review.confidence +
-    ", comments: " + review.comments.length,
+    "[AI] severity: " +
+      review.severity +
+      ", confidence: " +
+      review.confidence +
+      ", comments: " +
+      review.comments.length,
   );
 
   // save to database
-  const [savedReview] = await db.insert(reviews).values({
-    userId,
-    repositoryId: repo.id,
-    prNumber: pull_request.number,
-    prTitle: pull_request.title,
-    prUrl: pull_request.html_url,
-    author: pull_request.user.login,
-    severity: review.severity,
-    confidence: review.confidence ?? "high",
-    summary: review.summary,
-    filesChanged: files.length,
-    additions: pull_request.additions ?? 0,
-    deletions: pull_request.deletions ?? 0,
-    status: "completed",
-  }).returning();
+  const [savedReview] = await db
+    .insert(reviews)
+    .values({
+      userId,
+      repositoryId: repo.id,
+      prNumber: pull_request.number,
+      prTitle: pull_request.title,
+      prUrl: pull_request.html_url,
+      author: pull_request.user.login,
+      severity: review.severity,
+      confidence: review.confidence ?? "high",
+      summary: review.summary,
+      filesChanged: files.length,
+      additions: pull_request.additions ?? 0,
+      deletions: pull_request.deletions ?? 0,
+      status: "completed",
+    })
+    .returning();
 
   if (review.comments.length > 0) {
     await db.insert(reviewComments).values(
@@ -315,13 +348,33 @@ Return only JSON. No markdown, no explanation.`;
   // post comment to GitHub PR
   const dashboardUrl =
     (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") +
-    "/review/" + savedReview.id;
+    "/review/" +
+    savedReview.id;
+
+  if (review.severity === "high") {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (user?.email) {
+      sendHighSeverityAlert({
+        to: user.email,
+        prTitle: pull_request.title,
+        prUrl: pull_request.html_url,
+        repoName: repository.full_name,
+        summary: review.summary,
+        reviewUrl: dashboardUrl,
+      }).catch((err) => console.error("[EMAIL] failed:", err));
+    }
+  }
 
   const severityEmoji: Record<string, string> = {
-    low: "🟢", medium: "🟡", high: "🔴",
+    low: "🟢",
+    medium: "🟡",
+    high: "🔴",
   };
   const categoryEmoji: Record<string, string> = {
-    security: "🔒", bug: "🐛", performance: "⚡", quality: "✨",
+    security: "🔒",
+    bug: "🐛",
+    performance: "⚡",
+    quality: "✨",
   };
 
   let body = `## CodeLens Review ${severityEmoji[review.severity] ?? "⚪"}\n\n`;
