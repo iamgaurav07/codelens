@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sendHighSeverityAlert } from "@/lib/email";
+import { notifyUser } from "@/app/api/reviews/stream/route";
 
 interface GitHubFile {
   filename: string;
@@ -89,12 +90,15 @@ function getApp(): App {
   const privateKey = process.env.GITHUB_APP_PRIVATE_KEY
     ? process.env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n")
     : process.env.GITHUB_APP_PRIVATE_KEY_PATH
-    ? fs.readFileSync(process.env.GITHUB_APP_PRIVATE_KEY_PATH, "utf8")
-    : "";
+      ? fs.readFileSync(process.env.GITHUB_APP_PRIVATE_KEY_PATH, "utf8")
+      : "";
 
-  if (!privateKey) throw new Error("[HANDLER] GitHub App private key not configured");
-  if (!process.env.GITHUB_APP_ID) throw new Error("[HANDLER] GITHUB_APP_ID not configured");
-  if (!process.env.GITHUB_WEBHOOK_SECRET) throw new Error("[HANDLER] GITHUB_WEBHOOK_SECRET not configured");
+  if (!privateKey)
+    throw new Error("[HANDLER] GitHub App private key not configured");
+  if (!process.env.GITHUB_APP_ID)
+    throw new Error("[HANDLER] GITHUB_APP_ID not configured");
+  if (!process.env.GITHUB_WEBHOOK_SECRET)
+    throw new Error("[HANDLER] GITHUB_WEBHOOK_SECRET not configured");
 
   _app = new App({
     appId: process.env.GITHUB_APP_ID,
@@ -107,7 +111,8 @@ function getApp(): App {
 
 function getOpenAI(): OpenAI {
   if (_openai) return _openai;
-  if (!process.env.OPENAI_API_KEY) throw new Error("[HANDLER] OPENAI_API_KEY not configured");
+  if (!process.env.OPENAI_API_KEY)
+    throw new Error("[HANDLER] OPENAI_API_KEY not configured");
   _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   return _openai;
 }
@@ -162,7 +167,11 @@ export async function handlePullRequest(payload: PullRequestPayload) {
     .where(eq(installations.installationId, installation.id));
 
   if (!installRecord) {
-    console.log("[PR] no user linked to installationId " + installation.id + " — skipping");
+    console.log(
+      "[PR] no user linked to installationId " +
+        installation.id +
+        " — skipping",
+    );
     return;
   }
 
@@ -194,8 +203,12 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   }
 
   // get octokit client
-  const installationOctokit = await getApp().getInstallationOctokit(installation.id);
-  const { token } = (await installationOctokit.auth({ type: "installation" })) as any;
+  const installationOctokit = await getApp().getInstallationOctokit(
+    installation.id,
+  );
+  const { token } = (await installationOctokit.auth({
+    type: "installation",
+  })) as any;
   const octokit = new Octokit({ auth: token });
 
   // fetch diff
@@ -211,7 +224,13 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   const skipChecks = payload.isRereview || !sha;
 
   if (!skipChecks) {
-    await createCheckRun(octokit, repository.owner.login, repository.name, sha!, "in_progress");
+    await createCheckRun(
+      octokit,
+      repository.owner.login,
+      repository.name,
+      sha!,
+      "in_progress",
+    );
   }
 
   // detect languages
@@ -256,7 +275,15 @@ export async function handlePullRequest(payload: PullRequestPayload) {
   if (!diffText) {
     console.log("[AI] no reviewable diff, skipping");
     if (!skipChecks) {
-      await createCheckRun(octokit, repository.owner.login, repository.name, sha!, "completed", "neutral", "No reviewable diff found.");
+      await createCheckRun(
+        octokit,
+        repository.owner.login,
+        repository.name,
+        sha!,
+        "completed",
+        "neutral",
+        "No reviewable diff found.",
+      );
     }
     return;
   }
@@ -327,9 +354,12 @@ Return only JSON. No markdown, no explanation.`;
   const raw = response.choices[0].message.content ?? "{}";
   const review = JSON.parse(raw) as AIReview;
   console.log(
-    "[AI] severity: " + review.severity +
-    ", confidence: " + review.confidence +
-    ", comments: " + review.comments.length,
+    "[AI] severity: " +
+      review.severity +
+      ", confidence: " +
+      review.confidence +
+      ", comments: " +
+      review.comments.length,
   );
 
   // save to database
@@ -366,14 +396,50 @@ Return only JSON. No markdown, no explanation.`;
 
   console.log("[DB] saved review " + savedReview.id);
 
+  // after [DB] saved review log, add:
+  try {
+    notifyUser(userId, {
+      type: "review_complete",
+      review: {
+        id: savedReview.id,
+        prNumber: pull_request.number,
+        prTitle: pull_request.title,
+        prUrl: pull_request.html_url,
+        author: pull_request.user.login,
+        severity: review.severity,
+        confidence: review.confidence,
+        summary: review.summary,
+        filesChanged: files.length,
+        additions: pull_request.additions ?? 0,
+        deletions: pull_request.deletions ?? 0,
+        status: "completed",
+        createdAt: new Date().toISOString(),
+        repoFullName: repository.full_name,
+      },
+    });
+  } catch (err) {
+    console.error("[SSE] notify failed:", err);
+  }
+
   // post completed check run
   if (!skipChecks) {
     const conclusion = review.severity === "high" ? "failure" : "success";
-    await createCheckRun(octokit, repository.owner.login, repository.name, sha!, "completed", conclusion, review.summary);
+    await createCheckRun(
+      octokit,
+      repository.owner.login,
+      repository.name,
+      sha!,
+      "completed",
+      conclusion,
+      review.summary,
+    );
   }
 
   // send email alert for high severity
-  const dashboardUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") + "/review/" + savedReview.id;
+  const dashboardUrl =
+    (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") +
+    "/review/" +
+    savedReview.id;
 
   if (review.severity === "high") {
     try {
@@ -394,8 +460,17 @@ Return only JSON. No markdown, no explanation.`;
   }
 
   // post comment to GitHub PR
-  const severityEmoji: Record<string, string> = { low: "🟢", medium: "🟡", high: "🔴" };
-  const categoryEmoji: Record<string, string> = { security: "🔒", bug: "🐛", performance: "⚡", quality: "✨" };
+  const severityEmoji: Record<string, string> = {
+    low: "🟢",
+    medium: "🟡",
+    high: "🔴",
+  };
+  const categoryEmoji: Record<string, string> = {
+    security: "🔒",
+    bug: "🐛",
+    performance: "⚡",
+    quality: "✨",
+  };
 
   let body = `## CodeLens Review ${severityEmoji[review.severity] ?? "⚪"}\n\n`;
   body += `**Summary:** ${review.summary}\n\n`;
