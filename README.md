@@ -269,7 +269,7 @@ review_comments     — individual review issues
 
 **Gaurav Kumar** — Full Stack Engineer, Berlin
 - GitHub: [@iamgaurav07](https://github.com/iamgaurav07)
-- Portfolio: [AgentFlow](https://agent-platform-production-6865.up.railway.app) · [PulseVC](https://pulsevc-frontend.onrender.com)
+- Portfolio: [AgentFlow](https://agent-platform-production-6865.up.railway.app) · [PulseVC](https://pulsevc-frontend.onrender.com) 
 
 ---
 
