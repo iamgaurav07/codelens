@@ -17,7 +17,11 @@ export default function Login() {
     setError("");
 
     const params = new URLSearchParams(window.location.search);
-    const callbackUrl = params.get("callbackUrl") ?? "/dashboard";
+    const reason = params.get("reason");
+    const callbackUrl =
+      reason === "install"
+        ? "/api/github/link-installation"
+        : (params.get("callbackUrl") ?? "/dashboard");
 
     const res = await signIn("credentials", {
       email,
@@ -36,7 +40,11 @@ export default function Login() {
 
   const handleGitHub = () => {
     const params = new URLSearchParams(window.location.search);
-    const callbackUrl = params.get("callbackUrl") ?? "/dashboard";
+    const reason = params.get("reason");
+    const callbackUrl =
+      reason === "install"
+        ? "/api/github/link-installation"
+        : (params.get("callbackUrl") ?? "/dashboard");
     signIn("github", { callbackUrl });
   };
 

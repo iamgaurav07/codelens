@@ -17,9 +17,8 @@ export async function GET(req: NextRequest) {
     const installationId = searchParams.get("installation_id");
     const setupAction = searchParams.get("setup_action");
 
-    console.log("[INSTALL] callback hit, installationId:", installationId);
+    console.log("[INSTALL] callback hit, installationId:", installationId, "action:", setupAction);
 
-    // if no installation_id, just redirect to settings
     if (!installationId) {
       return NextResponse.redirect(new URL("/settings?error=no_installation", APP_URL));
     }
@@ -27,36 +26,44 @@ export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
     console.log("[INSTALL] session userId:", session?.user?.id ?? "none");
 
-    // not logged in — redirect to login then back here
     if (!session?.user?.id) {
-      const returnUrl = encodeURIComponent(
-        `/api/github/callback?installation_id=${installationId}&setup_action=${setupAction ?? "install"}`
+      // store installation_id in a cookie and redirect to login
+      const response = NextResponse.redirect(
+        new URL("/login?reason=install", APP_URL)
       );
-      return NextResponse.redirect(
-        new URL(`/login?callbackUrl=${returnUrl}`, APP_URL)
-      );
-    }
-
-    const [existing] = await db
-      .select()
-      .from(installations)
-      .where(eq(installations.installationId, parseInt(installationId)));
-
-    if (!existing) {
-      await db.insert(installations).values({
-        userId: session.user.id,
-        installationId: parseInt(installationId),
+      response.cookies.set("pending_installation_id", installationId, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        maxAge: 60 * 10, // 10 minutes
+        path: "/",
       });
-      console.log(`[INSTALL] linked installationId ${installationId} to user ${session.user.id}`);
-    } else if (existing.userId !== session.user.id) {
-      console.log(`[INSTALL] reassigning installationId ${installationId} to user ${session.user.id}`);
-    } else {
-      console.log(`[INSTALL] installationId ${installationId} already linked`);
+      return response;
     }
+
+    // save installation
+    await saveInstallation(session.user.id, installationId);
 
     return NextResponse.redirect(new URL("/settings?installed=true", APP_URL));
   } catch (e) {
     console.error("[INSTALL] error:", e);
     return NextResponse.redirect(new URL("/settings?error=install_failed", APP_URL));
+  }
+}
+
+async function saveInstallation(userId: string, installationId: string) {
+  const [existing] = await db
+    .select()
+    .from(installations)
+    .where(eq(installations.installationId, parseInt(installationId)));
+
+  if (!existing) {
+    await db.insert(installations).values({
+      userId,
+      installationId: parseInt(installationId),
+    });
+    console.log(`[INSTALL] linked installationId ${installationId} to user ${userId}`);
+  } else {
+    console.log(`[INSTALL] installationId ${installationId} already linked`);
   }
 }
