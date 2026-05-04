@@ -17,11 +17,7 @@ export default function Login() {
     setError("");
 
     const params = new URLSearchParams(window.location.search);
-    const reason = params.get("reason");
-    const callbackUrl =
-      reason === "install"
-        ? "/api/github/link-installation"
-        : (params.get("callbackUrl") ?? "/dashboard");
+    const callbackUrl = params.get("callbackUrl") ?? "/dashboard";
 
     const res = await signIn("credentials", {
       email,
