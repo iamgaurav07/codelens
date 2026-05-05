@@ -44,9 +44,30 @@ export default function Profile() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  if (status === "loading" || !session) {
-    return <div style={{ background: "#0A0A0F", minHeight: "100vh" }} />;
-  }
+  if (status === "loading" || !session)
+    return (
+      <div
+        style={{
+          background: "#F7F7F5",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            border: "2px solid #E4E4DC",
+            borderTop: "2px solid #1A1A18",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    );
 
   const initials =
     session.user?.name
@@ -59,23 +80,26 @@ export default function Profile() {
   return (
     <div
       style={{
-        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
-        background: "#0A0A0F",
+        fontFamily: "'Geist', 'DM Sans', system-ui, sans-serif",
+        background: "#F7F7F5",
         minHeight: "100vh",
-        color: "#fff",
+        color: "#1A1A18",
       }}
     >
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');*{box-sizing:border-box}a{text-decoration:none;color:inherit}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* NAV */}
       <nav
         style={{
+          height: 52,
+          background: "#fff",
+          borderBottom: "1px solid #E4E4DC",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "20px 40px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          padding: "0 24px",
           position: "sticky",
           top: 0,
-          background: "rgba(10,10,15,0.9)",
-          backdropFilter: "blur(12px)",
           zIndex: 100,
         }}
       >
@@ -84,64 +108,73 @@ export default function Profile() {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 10,
-            textDecoration: "none",
-            color: "#fff",
+            gap: 8,
+            fontWeight: 600,
+            fontSize: 15,
           }}
         >
-          <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="13" stroke="#6EE7B7" strokeWidth="1.5" />
-            <circle cx="14" cy="14" r="5" fill="#6EE7B7" />
-            <line
-              x1="14"
-              y1="1"
-              x2="14"
-              y2="6"
-              stroke="#6EE7B7"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <line
-              x1="14"
-              y1="22"
-              x2="14"
-              y2="27"
-              stroke="#6EE7B7"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <line
-              x1="1"
-              y1="14"
-              x2="6"
-              y2="14"
-              stroke="#6EE7B7"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <line
-              x1="22"
-              y1="14"
-              x2="27"
-              y2="14"
-              stroke="#6EE7B7"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span
-            style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.03em" }}
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              background: "#1A1A18",
+              borderRadius: 8,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            CodeLens
-          </span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="3" fill="white" />
+              <line
+                x1="8"
+                y1="1"
+                x2="8"
+                y2="4"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="8"
+                y1="12"
+                x2="8"
+                y2="15"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="1"
+                y1="8"
+                x2="4"
+                y2="8"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="12"
+                y1="8"
+                x2="15"
+                y2="8"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+          CodeLens
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Link
             href="/dashboard"
             style={{
-              color: "rgba(255,255,255,0.4)",
-              textDecoration: "none",
-              fontSize: 14,
+              padding: "5px 12px",
+              borderRadius: 6,
+              color: "#6B6B64",
+              fontSize: 13,
+              fontWeight: 500,
             }}
           >
             Reviews
@@ -149,9 +182,11 @@ export default function Profile() {
           <Link
             href="/settings"
             style={{
-              color: "rgba(255,255,255,0.4)",
-              textDecoration: "none",
-              fontSize: 14,
+              padding: "5px 12px",
+              borderRadius: 6,
+              color: "#6B6B64",
+              fontSize: 13,
+              fontWeight: 500,
             }}
           >
             Settings
@@ -159,25 +194,32 @@ export default function Profile() {
           <Link
             href="/profile"
             style={{
-              color: "#fff",
-              textDecoration: "none",
-              fontSize: 14,
-              fontWeight: 600,
+              padding: "5px 12px",
+              borderRadius: 6,
+              background: "#F0F0EC",
+              color: "#1A1A18",
+              fontSize: 13,
+              fontWeight: 500,
             }}
           >
             Profile
           </Link>
         </div>
+        <div style={{ width: 28 }} />
       </nav>
 
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 40px" }}>
-        {/* Avatar + name */}
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "32px 20px" }}>
+        {/* HEADER */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 24,
-            marginBottom: 48,
+            gap: 20,
+            marginBottom: 32,
+            padding: "24px",
+            background: "#fff",
+            border: "1px solid #E4E4DC",
+            borderRadius: 14,
           }}
         >
           {session.user?.image ? (
@@ -185,96 +227,97 @@ export default function Profile() {
               src={session.user.image}
               alt=""
               style={{
-                width: 72,
-                height: 72,
+                width: 64,
+                height: 64,
                 borderRadius: "50%",
-                border: "2px solid rgba(110,231,183,0.2)",
+                border: "2px solid #E4E4DC",
+                flexShrink: 0,
               }}
             />
           ) : (
             <div
               style={{
-                width: 72,
-                height: 72,
+                width: 64,
+                height: 64,
                 borderRadius: "50%",
-                background: "rgba(110,231,183,0.1)",
-                border: "2px solid rgba(110,231,183,0.2)",
+                background: "#F0F0EC",
+                border: "2px solid #E4E4DC",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 24,
-                fontWeight: 800,
-                color: "#6EE7B7",
+                fontSize: 20,
+                fontWeight: 700,
+                color: "#6B6B64",
+                flexShrink: 0,
               }}
             >
               {initials}
             </div>
           )}
           <div>
-            <h1
+            <div
               style={{
-                fontSize: 24,
-                fontWeight: 800,
-                letterSpacing: "-0.04em",
-                margin: "0 0 4px",
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#1A1A18",
+                letterSpacing: "-0.02em",
+                marginBottom: 3,
               }}
             >
               {session.user?.name ?? "Your profile"}
-            </h1>
-            <p
-              style={{
-                color: "rgba(255,255,255,0.4)",
-                fontSize: 14,
-                margin: 0,
-              }}
-            >
+            </div>
+            <div style={{ fontSize: 13, color: "#9B9B92" }}>
               {session.user?.email}
-            </p>
+            </div>
           </div>
         </div>
 
-        {/* Stats */}
+        {/* STATS */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 12,
-            marginBottom: 40,
+            gridTemplateColumns: "repeat(3,1fr)",
+            gap: 8,
+            marginBottom: 20,
           }}
         >
           {[
-            { label: "Total reviews", value: stats.total, color: "#fff" },
+            { label: "Total reviews", value: stats.total, color: "#1A1A18" },
             {
               label: "Issues found",
               value: stats.high + stats.medium,
-              color: "#FCD34D",
+              color: "#D97706",
             },
-            { label: "Clean PRs", value: stats.low, color: "#6EE7B7" },
+            { label: "Clean PRs", value: stats.low, color: "#16A34A" },
           ].map((s, i) => (
             <div
               key={i}
               style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                borderRadius: 12,
-                padding: "20px",
+                background: "#fff",
+                border: "1px solid #E4E4DC",
+                borderRadius: 10,
+                padding: "16px 14px",
               }}
             >
               <div
                 style={{
-                  fontSize: 28,
-                  fontWeight: 800,
-                  letterSpacing: "-0.04em",
+                  fontSize: 24,
+                  fontWeight: 700,
                   color: s.color,
+                  letterSpacing: "-0.04em",
+                  lineHeight: 1,
                 }}
               >
                 {s.value}
               </div>
               <div
                 style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#9B9B92",
                   marginTop: 4,
+                  textTransform: "uppercase" as const,
+                  letterSpacing: "0.05em",
                 }}
               >
                 {s.label}
@@ -283,35 +326,37 @@ export default function Profile() {
           ))}
         </div>
 
-        {/* Account settings */}
+        {/* ACCOUNT SETTINGS */}
         <div
           style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)",
-            borderRadius: 14,
+            background: "#fff",
+            border: "1px solid #E4E4DC",
+            borderRadius: 12,
             overflow: "hidden",
-            marginBottom: 24,
+            marginBottom: 14,
           }}
         >
           <div
             style={{
-              padding: "20px 24px",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              padding: "16px 20px",
+              borderBottom: "1px solid #E4E4DC",
+              background: "#F7F7F5",
             }}
           >
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, color: "#1A1A18" }}>
               Account settings
             </div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+            <div style={{ fontSize: 12, color: "#9B9B92", marginTop: 2 }}>
               Update your personal information
             </div>
           </div>
-          <div style={{ padding: "24px" }}>
-            <div style={{ marginBottom: 20 }}>
+          <div style={{ padding: "20px" }}>
+            <div style={{ marginBottom: 16 }}>
               <label
                 style={{
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.5)",
+                  fontWeight: 500,
+                  color: "#6B6B64",
                   display: "block",
                   marginBottom: 6,
                 }}
@@ -323,11 +368,11 @@ export default function Profile() {
                 onChange={(e) => setName(e.target.value)}
                 style={{
                   width: "100%",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "#F7F7F5",
+                  border: "1px solid #E4E4DC",
                   borderRadius: 8,
-                  padding: "11px 14px",
-                  color: "#fff",
+                  padding: "10px 13px",
+                  color: "#1A1A18",
                   fontSize: 14,
                   outline: "none",
                   boxSizing: "border-box" as const,
@@ -335,11 +380,12 @@ export default function Profile() {
                 }}
               />
             </div>
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 20 }}>
               <label
                 style={{
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.5)",
+                  fontWeight: 500,
+                  color: "#6B6B64",
                   display: "block",
                   marginBottom: 6,
                 }}
@@ -351,11 +397,11 @@ export default function Profile() {
                 disabled
                 style={{
                   width: "100%",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  background: "#F0F0EC",
+                  border: "1px solid #E4E4DC",
                   borderRadius: 8,
-                  padding: "11px 14px",
-                  color: "rgba(255,255,255,0.4)",
+                  padding: "10px 13px",
+                  color: "#9B9B92",
                   fontSize: 14,
                   outline: "none",
                   boxSizing: "border-box" as const,
@@ -368,13 +414,13 @@ export default function Profile() {
               onClick={handleSave}
               disabled={saving}
               style={{
-                background: saved ? "rgba(110,231,183,0.1)" : "#6EE7B7",
-                color: saved ? "#6EE7B7" : "#0A0A0F",
-                border: saved ? "1px solid rgba(110,231,183,0.2)" : "none",
+                background: saved ? "#F0FDF4" : "#1A1A18",
+                color: saved ? "#16A34A" : "#fff",
+                border: saved ? "1px solid #BBF7D0" : "none",
                 borderRadius: 8,
-                padding: "10px 24px",
-                fontWeight: 700,
-                fontSize: 14,
+                padding: "10px 20px",
+                fontWeight: 600,
+                fontSize: 13,
                 cursor: "pointer",
                 fontFamily: "inherit",
                 transition: "all 0.2s",
@@ -385,44 +431,38 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Danger zone */}
+        {/* SIGN OUT */}
         <div
           style={{
-            background: "rgba(239,68,68,0.04)",
-            border: "1px solid rgba(239,68,68,0.1)",
-            borderRadius: 14,
-            padding: "20px 24px",
+            background: "#fff",
+            border: "1px solid #FECACA",
+            borderRadius: 12,
+            padding: "18px 20px",
           }}
         >
           <div
             style={{
-              fontWeight: 700,
-              fontSize: 15,
-              marginBottom: 4,
-              color: "#F87171",
+              fontWeight: 600,
+              fontSize: 14,
+              color: "#DC2626",
+              marginBottom: 3,
             }}
           >
             Sign out
           </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.4)",
-              marginBottom: 16,
-            }}
-          >
+          <div style={{ fontSize: 13, color: "#9B9B92", marginBottom: 14 }}>
             Sign out of your CodeLens account on this device.
           </div>
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
             style={{
-              background: "rgba(239,68,68,0.1)",
-              color: "#F87171",
-              border: "1px solid rgba(239,68,68,0.15)",
+              background: "#FEF2F2",
+              color: "#DC2626",
+              border: "1px solid #FECACA",
               borderRadius: 8,
-              padding: "10px 24px",
+              padding: "9px 20px",
               fontWeight: 600,
-              fontSize: 14,
+              fontSize: 13,
               cursor: "pointer",
               fontFamily: "inherit",
             }}
